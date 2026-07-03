@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/src/server.ts",
+      "src": "api/server.ts",
       "use": "@vercel/node"
     },
     {
@@ -16,15 +16,11 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/src/server.ts"
-    },
-    {
-      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))$",
-      "dest": "/dist/$1"
+      "dest": "/api/server.ts"
     },
     {
       "src": "/(.*)",
-      "dest": "/dist/index.html"
+      "dest": "/dist/$1"
     }
   ],
   "installCommand": "npm install",
