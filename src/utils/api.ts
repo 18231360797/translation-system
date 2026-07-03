@@ -1,4 +1,7 @@
-const API_BASE_URL = '/api';
+const BAIDU_TRANSLATE_APPID = '20260702002641662';
+const BAIDU_TRANSLATE_KEY = 'HZVKuj6K3EYqVLhG06BE';
+const BAIDU_SPEECH_API_KEY = 'v2jnAJkUgETflhgP3YSRJ8d2';
+const BAIDU_SPEECH_SECRET_KEY = 'njhThY93AfEcuEGDg4WpuoXxcUVPUFdK';
 
 export interface TranslationResult {
   success: boolean;
@@ -58,14 +61,69 @@ export interface AuthResponse {
 }
 
 export const translate = async (text: string, sourceLang: string, targetLang: string): Promise<TranslationResult> => {
-  const response = await fetch(`${API_BASE_URL}/translate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ text, sourceLang, targetLang }),
-  });
-  return response.json();
+  try {
+    const salt = Date.now().toString();
+    const sign = window.crypto.subtle.digest('MD5', new TextEncoder().encode(BAIDU_TRANSLATE_APPID + text + salt + BAIDU_TRANSLATE_KEY))
+      .then(hash => {
+        const hexArray = Array.from(new Uint8Array(hash));
+        return hexArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      });
+    
+    const signValue = await sign;
+    const url = `https://fanyi-api.baidu.com/api/trans/vip/translate?q=${encodeURIComponent(text)}&from=${sourceLang || 'auto'}&to=${targetLang || 'en'}&appid=${BAIDU_TRANSLATE_APPID}&salt=${salt}&sign=${signValue}`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.trans_result && data.trans_result.length > 0) {
+      return {
+        success: true,
+        translation: data.trans_result[0].dst,
+        sourceLang: data.from || sourceLang,
+        targetLang: data.to || targetLang
+      };
+    } else {
+      return { success: false, translation: '', sourceLang, targetLang, message: data.error_msg || 'Translation failed' };
+    }
+  } catch (error) {
+    return { success: false, translation: '', sourceLang, targetLang, message: error instanceof Error ? error.message : 'Translation failed' };
+  }
+};
+
+export const speechToText = async (audio: string, lang: string): Promise<{ success: boolean; text?: string; message?: string }> => {
+  try {
+    const tokenResponse = await fetch(`https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=${BAIDU_SPEECH_API_KEY}&client_secret=${BAIDU_SPEECH_SECRET_KEY}`, {
+      method: 'POST'
+    });
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
+    
+    if (!accessToken) {
+      return { success: false, message: 'Failed to get access token' };
+    }
+    
+    const speechResponse = await fetch(`https://vop.baidu.com/server_api?cuid=translation-system&token=${accessToken}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        format: 'pcm',
+        rate: 16000,
+        channel: 1,
+        len: audio.length,
+        speech: audio,
+        lan: lang || 'zh'
+      })
+    });
+    const speechData = await speechResponse.json();
+    
+    if (speechData.err_no === 0) {
+      return { success: true, text: speechData.result[0] };
+    } else {
+      return { success: false, message: speechData.err_msg || 'Speech recognition failed' };
+    }
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : 'Speech recognition failed' };
+  }
 };
 
 export const getTranslationMemory = async (params?: {
@@ -74,19 +132,30 @@ export const getTranslationMemory = async (params?: {
   search?: string;
   favorite?: boolean;
 }): Promise<MemoryListResponse> => {
-  const query = new URLSearchParams();
-  if (params?.page) query.set('page', params.page.toString());
-  if (params?.limit) query.set('limit', params.limit.toString());
-  if (params?.search) query.set('search', params.search);
-  if (params?.favorite !== undefined) query.set('favorite', params.favorite.toString());
-
-  const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/memory?${query}`, {
-    headers: {
-      Authorization: token ? `Bearer ${token}` : '',
-    },
-  });
-  return response.json();
+  const items = JSON.parse(localStorage.getItem('translationMemory') || '[]');
+  let filtered = items;
+  
+  if (params?.search) {
+    const search = params.search;
+    filtered = filtered.filter((item: TranslationMemoryItem) => 
+      item.sourceText.includes(search) || item.translatedText.includes(search)
+    );
+  }
+  if (params?.favorite !== undefined) {
+    filtered = filtered.filter((item: TranslationMemoryItem) => item.isFavorite === params.favorite);
+  }
+  
+  const page = params?.page || 1;
+  const limit = params?.limit || 10;
+  const start = (page - 1) * limit;
+  const end = start + limit;
+  
+  return {
+    success: true,
+    data: filtered.slice(start, end),
+    total: filtered.length,
+    page
+  };
 };
 
 export const saveTranslationMemory = async (data: {
@@ -95,38 +164,36 @@ export const saveTranslationMemory = async (data: {
   sourceLang: string;
   targetLang: string;
 }): Promise<{ success: boolean; id: string }> => {
-  const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/memory`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: token ? `Bearer ${token}` : '',
-    },
-    body: JSON.stringify(data),
-  });
-  return response.json();
+  const items = JSON.parse(localStorage.getItem('translationMemory') || '[]');
+  const newItem: TranslationMemoryItem = {
+    id: Date.now().toString(),
+    ...data,
+    isFavorite: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  items.unshift(newItem);
+  localStorage.setItem('translationMemory', JSON.stringify(items));
+  return { success: true, id: newItem.id };
 };
 
 export const toggleFavorite = async (id: string): Promise<{ success: boolean; isFavorite: boolean }> => {
-  const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/memory/${id}/favorite`, {
-    method: 'PUT',
-    headers: {
-      Authorization: token ? `Bearer ${token}` : '',
-    },
-  });
-  return response.json();
+  const items = JSON.parse(localStorage.getItem('translationMemory') || '[]');
+  const item = items.find((i: TranslationMemoryItem) => i.id === id);
+  if (item) {
+    item.isFavorite = !item.isFavorite;
+    item.updatedAt = new Date().toISOString();
+    localStorage.setItem('translationMemory', JSON.stringify(items));
+    return { success: true, isFavorite: item.isFavorite };
+  }
+  return { success: false, isFavorite: false };
 };
 
 export const deleteMemory = async (id: string): Promise<{ success: boolean }> => {
-  const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/memory/${id}`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: token ? `Bearer ${token}` : '',
-    },
-  });
-  return response.json();
+  const items = JSON.parse(localStorage.getItem('translationMemory') || '[]');
+  const filtered = items.filter((i: TranslationMemoryItem) => i.id !== id);
+  localStorage.setItem('translationMemory', JSON.stringify(filtered));
+  return { success: true };
 };
 
 export const getCorpus = async (params?: {
@@ -136,42 +203,59 @@ export const getCorpus = async (params?: {
   category?: string;
   search?: string;
 }): Promise<CorpusListResponse> => {
-  const query = new URLSearchParams();
-  if (params?.page) query.set('page', params.page.toString());
-  if (params?.limit) query.set('limit', params.limit.toString());
-  if (params?.lang) query.set('lang', params.lang);
-  if (params?.category) query.set('category', params.category);
-  if (params?.search) query.set('search', params.search);
-
-  const response = await fetch(`${API_BASE_URL}/corpus?${query}`);
-  return response.json();
+  const items = JSON.parse(localStorage.getItem('corpus') || '[]');
+  let filtered = items;
+  
+  if (params?.lang) {
+    filtered = filtered.filter((item: CorpusItem) => item.sourceLang === params.lang || item.targetLang === params.lang);
+  }
+  if (params?.category) {
+    filtered = filtered.filter((item: CorpusItem) => item.category === params.category);
+  }
+  if (params?.search) {
+    const search = params.search;
+    filtered = filtered.filter((item: CorpusItem) => 
+      item.originalText.includes(search) || item.translatedText.includes(search)
+    );
+  }
+  
+  const page = params?.page || 1;
+  const limit = params?.limit || 10;
+  const start = (page - 1) * limit;
+  const end = start + limit;
+  
+  return {
+    success: true,
+    data: filtered.slice(start, end),
+    total: filtered.length,
+    page
+  };
 };
 
 export const getCorpusDetail = async (id: string): Promise<{ success: boolean; data: CorpusDetail }> => {
-  const response = await fetch(`${API_BASE_URL}/corpus/${id}`);
-  return response.json();
+  const items = JSON.parse(localStorage.getItem('corpus') || '[]');
+  const item = items.find((i: CorpusItem) => i.id === id);
+  if (item) {
+    return { success: true, data: { ...item, context: '' } };
+  }
+  return { success: false, data: {} as CorpusDetail };
 };
 
 export const login = async (email: string, password: string): Promise<AuthResponse> => {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
-  return response.json();
+  if (email === 'admin@example.com' && password === 'password') {
+    const token = 'test-token-123';
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify({ id: '1', email }));
+    return { success: true, user: { id: '1', email }, token };
+  }
+  return { success: false };
 };
 
-export const register = async (email: string, password: string): Promise<AuthResponse> => {
-  const response = await fetch(`${API_BASE_URL}/auth/register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
-  return response.json();
+export const register = async (email: string, _password: string): Promise<AuthResponse> => {
+  const token = 'test-token-123';
+  localStorage.setItem('token', token);
+  localStorage.setItem('user', JSON.stringify({ id: '1', email }));
+  return { success: true, user: { id: '1', email }, token };
 };
 
 export const logout = (): void => {

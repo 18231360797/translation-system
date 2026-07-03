@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff, Settings, Volume2, AlertCircle, Keyboard, Info } from 'lucide-react';
 import { languages, getNativeName } from '@/utils/languages';
-import { translate } from '@/utils/api';
+import { translate, speechToText } from '@/utils/api';
 
 interface SubtitleEntry {
   id: number;
@@ -43,23 +43,7 @@ const mapLangCode = (code: string): string => {
     'bg': 'bg-BG',
     'el': 'el-GR',
   };
-  return langMap[code] || code;
-};
-
-const speechToText = async (audioBase64: string, lang: string): Promise<{ success: boolean; text: string; message?: string }> => {
-  try {
-    const response = await fetch('/api/speech/speech-to-text', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ audio: audioBase64, lang }),
-    });
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    return { success: false, text: '', message: error instanceof Error ? error.message : 'Speech recognition failed' };
-  }
+return langMap[code] || code;
 };
 
 export const Subtitle = () => {
