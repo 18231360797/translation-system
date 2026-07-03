@@ -1,14 +1,17 @@
 {
   "version": 2,
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "functions": {
-    "api/server.ts": {
+    "api/index.ts": {
       "runtime": "@vercel/node@3.0.0"
     }
   },
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/server.ts"
+      "dest": "/api/index.ts"
     },
     {
       "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))$",
@@ -18,7 +21,5 @@
       "src": "/(.*)",
       "dest": "/dist/index.html"
     }
-  ],
-  "installCommand": "npm install",
-  "buildCommand": "npm run build"
+  ]
 }
