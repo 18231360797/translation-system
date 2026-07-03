@@ -1,0 +1,37 @@
+name: Sync Gitee and GitHub
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync-to-gitee:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Gitee
+        env:
+          GITEE_REPO: https://${{ secrets.GITEE_TOKEN }}@gitee.com/zhao-chenmei/translation-garden.git
+        run: |
+          git remote add gitee $GITEE_REPO
+          git push gitee main --force
+
+  sync-to-github:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to GitHub
+        env:
+          GITHUB_REPO: https://${{ secrets.GITHUB_TOKEN }}@github.com/18231360797/translation-system.git
+        run: |
+          git remote add github $GITHUB_REPO
+          git push github main --force

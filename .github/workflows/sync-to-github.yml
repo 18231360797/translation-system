@@ -1,0 +1,25 @@
+name: Sync to GitHub
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add GitHub remote
+        env:
+          GITHUB_REPO: ${{ secrets.GITHUB_REPO_URL }}
+        run: |
+          git remote add github $GITHUB_REPO
+
+      - name: Push to GitHub
+        run: |
+          git push github main --force
