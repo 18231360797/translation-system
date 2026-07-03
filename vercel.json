@@ -19,8 +19,12 @@
       "dest": "/api/server.ts"
     },
     {
-      "src": "/(.*)",
+      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))$",
       "dest": "/dist/$1"
+    },
+    {
+      "src": "/[^.]*$",
+      "dest": "/dist/index.html"
     }
   ],
   "installCommand": "npm install",
