@@ -77,7 +77,6 @@ export const Subtitle = () => {
   const [manualInput, setManualInput] = useState('');
   const [recordingStatus, setRecordingStatus] = useState('idle');
   const [speechApiStatus, setSpeechApiStatus] = useState<'loading' | 'available' | 'unavailable'>('available');
-  const [showSpeechInfo, setShowSpeechInfo] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);

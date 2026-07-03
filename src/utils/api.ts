@@ -5,6 +5,7 @@ export interface TranslationResult {
   translation: string;
   sourceLang: string;
   targetLang: string;
+  message?: string;
 }
 
 export interface TranslationMemoryItem {
