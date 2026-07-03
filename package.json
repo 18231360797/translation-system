@@ -2,6 +2,9 @@
   "name": "translate-system",
   "version": "1.0.0",
   "description": "翻译系统 - 多语种互译、翻译记忆库、语料库、实时字幕",
+  "engines": {
+    "node": "18.x"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "vite",
